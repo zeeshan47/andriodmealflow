@@ -58,6 +58,19 @@ function Get-BuildConfigValue($content, $key) {
     return ""
 }
 
+function Test-GhCommand {
+    param(
+        [string[]]$CommandArguments
+    )
+
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    & gh @CommandArguments *> $null
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = $previousPreference
+    return $exitCode -eq 0
+}
+
 if ([string]::IsNullOrWhiteSpace($VersionName)) {
     $VersionName = Read-Host "Enter new version number, for example 1.1"
 }
@@ -95,20 +108,41 @@ if ([string]::IsNullOrWhiteSpace($owner) -or [string]::IsNullOrWhiteSpace($repo)
     Fail "GitHub updater owner/repo is not configured in app\build.gradle.kts."
 }
 
+$repoSlug = "$owner/$repo"
+Write-Host ""
+Write-Host "Checking GitHub repository access for $repoSlug..." -ForegroundColor Cyan
+if (!(Test-GhCommand -CommandArguments @("repo", "view", $repoSlug))) {
+    Fail "GitHub CLI cannot access $repoSlug. Check the repo name, then run: gh auth login -h github.com -s repo"
+}
+
 $versionCodeMatch = [regex]::Match($buildText, 'versionCode\s*=\s*(\d+)')
 if (!$versionCodeMatch.Success) {
     Fail "Could not find versionCode in app\build.gradle.kts."
 }
 
+$versionNameMatch = [regex]::Match($buildText, 'versionName\s*=\s*"([^"]+)"')
+if (!$versionNameMatch.Success) {
+    Fail "Could not find versionName in app\build.gradle.kts."
+}
+
 $currentVersionCode = [int]$versionCodeMatch.Groups[1].Value
-$newVersionCode = $currentVersionCode + 1
+$currentVersionName = $versionNameMatch.Groups[1].Value
+$newVersionCode = if ($currentVersionName -eq $VersionName) {
+    $currentVersionCode
+} else {
+    $currentVersionCode + 1
+}
 
 $buildText = [regex]::Replace($buildText, 'versionCode\s*=\s*\d+', "versionCode    = $newVersionCode", 1)
 $buildText = [regex]::Replace($buildText, 'versionName\s*=\s*"[^"]+"', "versionName    = `"$VersionName`"", 1)
 Set-Content -Path $BuildFile -Value $buildText -NoNewline
 
 Write-Host ""
-Write-Host "Version updated to $VersionName, versionCode $newVersionCode." -ForegroundColor Green
+if ($currentVersionName -eq $VersionName) {
+    Write-Host "Version is already $VersionName, keeping versionCode $newVersionCode." -ForegroundColor Green
+} else {
+    Write-Host "Version updated to $VersionName, versionCode $newVersionCode." -ForegroundColor Green
+}
 
 $gradle = Find-Gradle
 if (!$gradle) {
@@ -162,15 +196,13 @@ if ($pendingCommit) {
 
 Run "git" @("push") "Pushing code to GitHub"
 
-$repoSlug = "$owner/$repo"
 $tag = "v$VersionName"
 $releaseTitle = "FastPOS Android $tag"
 $releaseNotes = "FastPOS Android update $tag."
 
 Write-Host ""
 Write-Host "Uploading $assetName to GitHub release $tag..." -ForegroundColor Cyan
-gh release view $tag --repo $repoSlug *> $null
-if ($LASTEXITCODE -eq 0) {
+if (Test-GhCommand -CommandArguments @("release", "view", $tag, "--repo", $repoSlug)) {
     Run "gh" @("release", "upload", $tag, $assetPath, "--repo", $repoSlug, "--clobber") "Uploading APK to existing release"
 } else {
     Run "gh" @("release", "create", $tag, $assetPath, "--repo", $repoSlug, "--title", $releaseTitle, "--notes", $releaseNotes) "Creating GitHub release"
