@@ -18,7 +18,7 @@ android {
         versionName    = "1.0"
 
         buildConfigField("String", "GITHUB_UPDATE_OWNER", "\"zeeshan47\"")
-        buildConfigField("String", "GITHUB_UPDATE_REPO", "\"fastposandriod\"")
+        buildConfigField("String", "GITHUB_UPDATE_REPO", "\"andriodmealflow\"")
     }
 
     buildTypes {
