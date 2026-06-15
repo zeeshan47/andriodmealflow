@@ -71,6 +71,29 @@ function Test-GhCommand {
     return $exitCode -eq 0
 }
 
+function Read-KeyProperties {
+    $properties = @{}
+    if (!(Test-Path $KeyPropertiesFile)) {
+        return $properties
+    }
+
+    foreach ($line in Get-Content -Path $KeyPropertiesFile) {
+        $trimmed = $line.Trim()
+        if ($trimmed.Length -eq 0 -or $trimmed.StartsWith("#")) {
+            continue
+        }
+        $index = $trimmed.IndexOf("=")
+        if ($index -lt 1) {
+            continue
+        }
+        $name = $trimmed.Substring(0, $index).Trim()
+        $value = $trimmed.Substring($index + 1).Trim()
+        $properties[$name] = $value
+    }
+
+    return $properties
+}
+
 if ([string]::IsNullOrWhiteSpace($VersionName)) {
     $VersionName = Read-Host "Enter new version number, for example 1.1"
 }
@@ -83,6 +106,7 @@ if ($VersionName -notmatch '^\d+(\.\d+){0,3}([-_A-Za-z0-9.]+)?$') {
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $BuildFile = Join-Path $RepoRoot "app\build.gradle.kts"
 $DistDir = Join-Path $RepoRoot "dist"
+$KeyPropertiesFile = Join-Path $RepoRoot "key.properties"
 
 if (!(Test-Path $BuildFile)) {
     Fail "Cannot find app\build.gradle.kts. Run this command from the project folder."
@@ -154,17 +178,24 @@ if ([string]::IsNullOrWhiteSpace($env:JAVA_HOME) -and (Test-Path $androidStudioJ
     $env:JAVA_HOME = $androidStudioJbr
 }
 
-$releaseSigningConfigured = $buildText -match 'signingConfig'
-$buildTask = if ($releaseSigningConfigured) { ":app:assembleRelease" } else { ":app:assembleDebug" }
-$buildType = if ($releaseSigningConfigured) { "release" } else { "debug" }
+$keyProperties = Read-KeyProperties
+$storeFileValue = $keyProperties["storeFile"]
+$storeFilePath = if ([string]::IsNullOrWhiteSpace($storeFileValue)) { "" } else { Join-Path $RepoRoot $storeFileValue }
+$releaseSigningConfigured = (Test-Path $KeyPropertiesFile) -and
+    !([string]::IsNullOrWhiteSpace($storeFileValue)) -and
+    (Test-Path $storeFilePath) -and
+    !([string]::IsNullOrWhiteSpace($keyProperties["storePassword"])) -and
+    !([string]::IsNullOrWhiteSpace($keyProperties["keyAlias"])) -and
+    !([string]::IsNullOrWhiteSpace($keyProperties["keyPassword"]))
 
 if (!$releaseSigningConfigured) {
-    Write-Host ""
-    Write-Host "WARNING: Release signing is not configured. Building a debug APK." -ForegroundColor Yellow
-    Write-Host "This is okay for testing, but customer updates should use a signed release APK." -ForegroundColor Yellow
+    Fail "Release signing is not configured. Run create_release_keystore.cmd first, then publish again."
 }
 
-Run $gradle @($buildTask) "Building $buildType APK"
+$buildTask = ":app:assembleRelease"
+$buildType = "release"
+
+Run $gradle @($buildTask) "Building signed release APK"
 
 $apkFolder = Join-Path $RepoRoot "app\build\outputs\apk\$buildType"
 $apk = Get-ChildItem -Path $apkFolder -Filter "*.apk" -ErrorAction SilentlyContinue |

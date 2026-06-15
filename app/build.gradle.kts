@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,6 +7,20 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
 }
+
+val releaseKeystorePropertiesFile = rootProject.file("key.properties")
+val releaseKeystoreProperties = Properties().apply {
+    if (releaseKeystorePropertiesFile.exists()) {
+        releaseKeystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+val releaseStoreFilePath = releaseKeystoreProperties.getProperty("storeFile").orEmpty()
+val releaseStoreFile = releaseStoreFilePath.takeIf { it.isNotBlank() }?.let { rootProject.file(it) }
+val hasReleaseSigning = releaseKeystorePropertiesFile.exists() &&
+    releaseStoreFile?.exists() == true &&
+    releaseKeystoreProperties.getProperty("storePassword").orEmpty().isNotBlank() &&
+    releaseKeystoreProperties.getProperty("keyAlias").orEmpty().isNotBlank() &&
+    releaseKeystoreProperties.getProperty("keyPassword").orEmpty().isNotBlank()
 
 android {
     namespace   = "com.fastpos.android"
@@ -21,9 +37,23 @@ android {
         buildConfigField("String", "GITHUB_UPDATE_REPO", "\"andriodmealflow\"")
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = releaseStoreFile
+                storePassword = releaseKeystoreProperties.getProperty("storePassword")
+                keyAlias = releaseKeystoreProperties.getProperty("keyAlias")
+                keyPassword = releaseKeystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
