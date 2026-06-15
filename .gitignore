@@ -4,6 +4,7 @@
 build/
 app/build/
 */build/
+dist/
 
 # Local IDE and machine files
 .idea/
