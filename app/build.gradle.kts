@@ -30,8 +30,8 @@ android {
         applicationId  = "com.fastpos.android"
         minSdk = 24
         targetSdk      = 35
-        versionCode    = 13
-        versionName    = "61.1.1"
+        versionCode    = 14
+        versionName    = "62.1.1"
 
         buildConfigField("String", "GITHUB_UPDATE_OWNER", "\"zeeshan47\"")
         buildConfigField("String", "GITHUB_UPDATE_REPO", "\"andriodmealflow\"")
