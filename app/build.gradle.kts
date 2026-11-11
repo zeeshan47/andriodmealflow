@@ -30,8 +30,8 @@ android {
         applicationId  = "com.fastpos.android"
         minSdk = 24
         targetSdk      = 35
-        versionCode    = 18
-        versionName    = "64.0.0"
+        versionCode    = 19
+        versionName    = "65.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Optional isolated package for cart UI tests; never replaces the installed POS app.
         if (providers.gradleProperty("cartUiTest").isPresent) applicationIdSuffix = ".cartuitest"
