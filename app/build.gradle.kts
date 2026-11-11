@@ -30,11 +30,27 @@ android {
         applicationId  = "com.fastpos.android"
         minSdk = 24
         targetSdk      = 35
-        versionCode    = 15
-        versionName    = "63.1.1"
+        versionCode    = 18
+        versionName    = "64.0.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Optional isolated package for cart UI tests; never replaces the installed POS app.
+        if (providers.gradleProperty("cartUiTest").isPresent) applicationIdSuffix = ".cartuitest"
 
         buildConfigField("String", "GITHUB_UPDATE_OWNER", "\"zeeshan47\"")
         buildConfigField("String", "GITHUB_UPDATE_REPO", "\"andriodmealflow\"")
+    }
+
+    flavorDimensions += "edition"
+    productFlavors {
+        create("full") {
+            dimension = "edition"
+            buildConfigField("String", "APP_PROFILE", "\"full\"")
+        }
+        create("staff") {
+            dimension = "edition"
+            applicationIdSuffix = ".staff"
+            buildConfigField("String", "APP_PROFILE", "\"staff\"")
+        }
     }
 
     signingConfigs {
@@ -124,4 +140,13 @@ dependencies {
 
     // Unit tests (LicenseKeyGenerator runs as a local JVM test)
     testImplementation(libs.junit)
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+}
+
+// Each isolated SQL fixture is a separate test input; never reuse results from an old database.
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    inputs.property("sqlAuditState",providers.environmentVariable("ANDROID_AUDIT_STATE").orElse("disabled"))
 }
